@@ -7,7 +7,7 @@
 
 Base package for implementing GraphQL servers. You might prefer [`package:angel3_graphql`](https://pub.dev/packages/angel3_graphql), the fastest way to implement GraphQL backends in Dart.
 
-`package:graphql_server2` does not require any specific framework, and thus can be used in any Dart project.
+`package:graphql_server3` does not require any specific framework, and thus can be used in any Dart project.
 
 ## Ad-hoc Usage
 
