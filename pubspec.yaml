@@ -1,0 +1,28 @@
+name: graphql_server3
+version: 6.3.0
+description: Base package for implementing GraphQL servers. You might prefer `package:angel3_graphql`, the fastest way to implement GraphQL backends in Dart.
+homepage: https://github.com/raphrmx/graphql_server3
+repository: https://github.com/raphrmx/graphql_server3
+
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+
+dependencies:
+  angel3_serialize: ^8.0.0
+  graphql_schema3: ^6.0.0
+  graphql_parser3: ^6.0.0
+  collection: ^1.17.0
+  meta: ^1.9.0
+  recase: ^4.1.0
+  stream_channel: ^2.1.0
+  tuple: ^2.0.0
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.24.0
+
+dependency_overrides:
+  graphql_parser3:
+    path: ../graphql_parser3
+  graphql_schema3:
+    path: ../graphql_schema3
