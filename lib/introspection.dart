@@ -1,3 +1,9 @@
+/// Builds the `__schema` and `__type` fields a client introspects a schema with.
+///
+/// Applied for you by [GraphQL] unless it is constructed with
+/// `introspect: false`.
+library;
+
 import 'package:collection/collection.dart' show IterableExtension;
 import 'package:graphql_schema3/graphql_schema3.dart';
 
@@ -443,6 +449,11 @@ GraphQLObjectType _reflectEnumValueType() {
   );
 }
 
+/// Every type reachable from [schema], plus [specifiedTypes].
+///
+/// The three root operation types are walked transitively, so a type only
+/// mentioned deep inside a field still turns up. This is what introspection
+/// answers `__schema { types }` with.
 List<GraphQLType?> fetchAllTypes(
   GraphQLSchema schema,
   List<GraphQLType?> specifiedTypes,
@@ -462,15 +473,23 @@ List<GraphQLType?> fetchAllTypes(
   return CollectTypes(data).types.toList();
 }
 
+/// Walks a set of types and collects everything they reach.
+///
+/// Traversal is cycle-safe: a schema refers back to itself constantly, and a
+/// type already seen is not descended into twice.
 class CollectTypes {
+  /// The types collected so far.
   Set<GraphQLType?> traversedTypes = {};
 
+  /// The types collected, in traversal order.
   Set<GraphQLType?> get types => traversedTypes;
 
+  /// Collects everything reachable from each of [types].
   CollectTypes(Iterable<GraphQLType?> types) {
     types.forEach(_fetchAllTypesFromType);
   }
 
+  /// Collects everything reachable from a single root object [type].
   CollectTypes.fromRootObject(GraphQLObjectType type) {
     _fetchAllTypesFromObject(type);
   }

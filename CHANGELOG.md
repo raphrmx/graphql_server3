@@ -1,5 +1,19 @@
 # Change Log
 
+## 3.2.1
+
+### Added
+- Documentation for the whole public API. It stood at 16 of 98 elements, which
+  is below the 20% pub.dev asks for, and the part that was missing was the part
+  a reader needs: every method of [GraphQL], the Apollo subscription classes,
+  and the two libraries themselves. Each method now says what it answers and
+  what it throws, and `parseAndExecute` says plainly that the document is never
+  validated against the schema first.
+- The `public_member_api_docs` lint, so that this cannot quietly come back. The
+  package analyzes clean with it on.
+
+No code changed.
+
 ## 3.2.0
 
 First release published to pub.dev. `graphql_schema3` and `graphql_parser3` are
