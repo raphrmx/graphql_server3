@@ -161,19 +161,17 @@ GraphQLObjectType? _reflectSchemaTypes() {
   return _typeType;
 }
 
-final GraphQLEnumType<String> _typeKindType = enumTypeFromStrings(
-  '__TypeKind',
-  [
-    'SCALAR',
-    'OBJECT',
-    'INTERFACE',
-    'UNION',
-    'ENUM',
-    'INPUT_OBJECT',
-    'LIST',
-    'NON_NULL',
-  ],
-);
+final GraphQLEnumType<String> _typeKindType =
+    enumTypeFromStrings('__TypeKind', [
+      'SCALAR',
+      'OBJECT',
+      'INTERFACE',
+      'UNION',
+      'ENUM',
+      'INPUT_OBJECT',
+      'LIST',
+      'NON_NULL',
+    ]);
 
 GraphQLObjectType _createTypeType() {
   var enumValueType = _reflectEnumValueType();
