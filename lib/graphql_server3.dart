@@ -229,11 +229,18 @@ class GraphQL {
   ) {
     var ops = document.definitions.whereType<OperationDefinitionContext>();
     if (operationName == null) {
-      return ops.length == 1
-          ? ops.first
-          : throw GraphQLException.fromMessage(
-              'This document does not define any operations.',
-            );
+      if (ops.isEmpty) {
+        throw GraphQLException.fromMessage(
+          'This document does not define any operations.',
+        );
+      }
+      if (ops.length > 1) {
+        throw GraphQLException.fromMessage(
+          'This document defines ${ops.length} operations, so one must be '
+          'named in the request.',
+        );
+      }
+      return ops.first;
     } else {
       return ops.firstWhere(
         (d) => d.name == operationName,
@@ -321,7 +328,7 @@ class GraphQL {
       if (val is JsonPathArgument) {
         lazy.add([...val.splitted, val]);
       } else if (val is Map<String, dynamic>) {
-        makeLazy(val);
+        lazy.addAll(makeLazy(val));
       }
     }
 
@@ -569,46 +576,50 @@ class GraphQL {
       }
 
       final fields = groupedFieldSet[responseKey] ?? [];
-
-      for (var field in fields) {
-        var fieldName =
-            field.field?.fieldName.alias?.name ?? field.field?.fieldName.name;
-        FutureOr futureResponseValue;
-
-        if (fieldName == '__typename') {
-          futureResponseValue = objectType.name;
-        } else {
-          final fieldType = objectType.fields
-              .firstWhereOrNull((f) => f.name == fieldName)
-              ?.type;
-
-          if (fieldType == null) {
-            continue;
-          }
-
-          futureResponseValue = executeField(
-            document,
-            fieldName,
-            objectType,
-            objectValue,
-            fields,
-            fieldType,
-            Map<String, dynamic>.from(globalVariables)..addAll(variableValues),
-            globalVariables,
-            lazy: nextLazy.toList(),
-          );
-        }
-
-        final val = resultMap[responseKey] = await futureResponseValue;
-
-        for (final lz in doneLazy) {
-          if (lz.first as String == responseKey) {
-            (lz.last as JsonPathArgument).complete(val);
-          }
-        }
+      if (fields.isEmpty) {
+        continue;
       }
 
-      //final map = resultMap[responseKey];
+      // One response key is resolved once, however many selections were merged
+      // into it: `{ user { name } user { age } }` groups two selections under
+      // `user`, and they share a single call to the `user` resolver. The whole
+      // group is handed to executeField, which merges their sub-selections.
+      final SelectionContext field = fields.first;
+      final String? fieldName =
+          field.field?.fieldName.alias?.name ?? field.field?.fieldName.name;
+      FutureOr<dynamic> futureResponseValue;
+
+      if (fieldName == '__typename') {
+        futureResponseValue = objectType.name;
+      } else {
+        final fieldType = objectType.fields
+            .firstWhereOrNull((f) => f.name == fieldName)
+            ?.type;
+
+        if (fieldType == null) {
+          continue;
+        }
+
+        futureResponseValue = executeField(
+          document,
+          fieldName,
+          objectType,
+          objectValue,
+          fields,
+          fieldType,
+          Map<String, dynamic>.from(globalVariables)..addAll(variableValues),
+          globalVariables,
+          lazy: nextLazy.toList(),
+        );
+      }
+
+      final val = resultMap[responseKey] = await futureResponseValue;
+
+      for (final lz in doneLazy) {
+        if (lz.first as String == responseKey) {
+          (lz.last as JsonPathArgument).complete(val);
+        }
+      }
     }
 
     return resultMap;
@@ -792,6 +803,9 @@ class GraphQL {
   }) async {
     if (fieldType is GraphQLNonNullableType) {
       var innerType = fieldType.ofType;
+      // Unwrapping `T!` into `T` is a pass-through, so the pending json path
+      // arguments have to travel with it; they used to be dropped here, which
+      // left a `@jsonpath` variable behind a non-nullable field uncompleted.
       var completedResult = await completeValue(
         document,
         fieldName,
@@ -800,6 +814,7 @@ class GraphQL {
         result,
         variableValues,
         globalVariables,
+        lazy: lazy,
       );
 
       if (completedResult == null) {
@@ -959,11 +974,14 @@ class GraphQL {
     GraphQLObjectType? objectType,
     SelectionSetContext selectionSet,
     Map<String?, dynamic> variableValues, {
-    List? visitedFragments,
+    Set<String?>? visitedFragments,
     GraphQLObjectType? parentType,
   }) {
     var groupedFields = <String?, List<SelectionContext>>{};
-    visitedFragments ??= [];
+    // Shared with the recursive calls below, so that a fragment that spreads
+    // itself - directly or through a chain - is expanded once instead of
+    // recursing until the stack gives out.
+    visitedFragments ??= <String?>{};
 
     for (var selection in selectionSet.selections) {
       final field = selection.field;
@@ -989,8 +1007,7 @@ class GraphQL {
         groupForResponseKey.add(selection);
       } else if (selection.fragmentSpread != null) {
         var fragmentSpreadName = selection.fragmentSpread!.name;
-        if (visitedFragments.contains(fragmentSpreadName)) continue;
-        visitedFragments.add(fragmentSpreadName);
+        if (!visitedFragments.add(fragmentSpreadName)) continue;
         var fragment = document.definitions
             .whereType<FragmentDefinitionContext>()
             .firstWhereOrNull((f) => f.name == fragmentSpreadName);
@@ -1004,6 +1021,7 @@ class GraphQL {
           objectType,
           fragmentSelectionSet,
           variableValues,
+          visitedFragments: visitedFragments,
         );
 
         for (var responseKey in fragmentGroupFieldSet.keys) {
@@ -1029,6 +1047,7 @@ class GraphQL {
           objectType,
           fragmentSelectionSet,
           variableValues,
+          visitedFragments: visitedFragments,
         );
 
         for (var responseKey in fragmentGroupFieldSet.keys) {
@@ -1051,22 +1070,23 @@ class GraphQL {
     Directives holder,
     Map<String?, dynamic> variableValues,
   ) {
-    var directive = holder.directives.firstWhereOrNull((d) {
-      var vv = d.value;
-
-      if (vv is VariableContext) {
-        return vv.name == name;
-      } else if (vv == null) {
-        return d.nameToken?.text == name;
-      } else {
-        return vv.computeValue(variableValues as Map<String, dynamic>) == name;
-      }
-    });
+    // A directive is matched on its own name. The value it carries is read
+    // from whichever of the two syntaxes the parser saw: `@skip(if: true)`,
+    // whose argument must be the one asked for, or the shorthand `@skip: true`,
+    // which has no argument name at all. The shorthand used to compare the
+    // *value* against the directive name and so never matched anything.
+    final directive = holder.directives.firstWhereOrNull((d) => d.name == name);
 
     if (directive == null) return null;
-    if (directive.argument?.name != argumentName) return null;
 
-    var vv = directive.argument!.value;
+    final InputValueContext? vv = directive.argument == null
+        ? directive.value
+        : (directive.argument!.name == argumentName
+              ? directive.argument!.value
+              : null);
+
+    if (vv == null) return null;
+
     if (vv is VariableContext) {
       var vname = vv.name;
       if (!variableValues.containsKey(vname)) {
