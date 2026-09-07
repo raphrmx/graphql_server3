@@ -1,5 +1,5 @@
 name: graphql_server3
-version: 3.1.0
+version: 3.2.0
 description: Base package for implementing GraphQL servers. You might prefer `package:angel3_graphql`, the fastest way to implement GraphQL backends in Dart.
 homepage: https://github.com/raphrmx/graphql_server3
 repository: https://github.com/raphrmx/graphql_server3

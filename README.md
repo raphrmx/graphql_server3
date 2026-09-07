@@ -7,6 +7,77 @@
 Base package for implementing GraphQL servers. It does not require any specific framework, and
 thus can be used in any Dart project.
 
+## Where this comes from
+
+This package is a fork of the GraphQL stack maintained as part of
+[Angel3](https://github.com/dukefirehawk/angel), which itself descends from the
+`graphql_*` packages Tobe O wrote for Angel. The fork is taken from the `2`
+line; the original BSD-3-Clause licence and its copyright notice are kept
+verbatim in [LICENSE](LICENSE), and the bulk of the type system, the parser and
+the execution algorithm are still that work.
+
+Why fork at all. Two reasons, and only the second one still holds:
+
+- Upstream had stopped moving while the projects depending on it had not.
+  Development there has since resumed, but by then the two lines had diverged
+  far enough that merging back would cost more than it returns.
+- The stack was pinned to `angel3_*`, and `angel3_*` decided which `analyzer`
+  and which Dart SDK everything downstream could use. That is what held the
+  generator seven `analyzer` majors back for months. Cutting the tie was the
+  point of the `3` line.
+
+So: the `3` line does not track upstream and does not merge from it. It is
+maintained on its own, with three rules - as few dependencies as possible, no
+dependency that dictates the SDK, and no behaviour without a test covering it.
+
+## What version 3 changed
+
+Four dependencies: `graphql_schema3`, `graphql_parser3`, `collection` and
+`stream_channel`.
+
+Removed:
+
+- `lib/mirrors.dart`, neither exported nor imported anywhere. It pulled in
+  `dart:mirrors`, which rules out AOT compilation, Flutter and the web for
+  anyone who happened to import it.
+- `angel3_serialize`, whose `Exclude` and `Alias` annotations that file alone
+  used; `tuple`, declared and never imported; and `recase`, which served one
+  conversion, spelling `__DirectiveLocation` values in screaming snake case,
+  now done in place.
+
+Fixed, in execution order rather than order of severity:
+
+- A fragment that spreads itself, directly or through a chain, took the isolate
+  down with a `StackOverflowError`. The guard that remembers which fragments
+  have been expanded was rebuilt at every level of the recursion instead of
+  being shared with it. Forty characters of query were enough to stop a server.
+- A response key merged from several selections resolved its field once per
+  selection: `{ user { name } user { age } }` called the `user` resolver twice
+  and kept the second answer. Every resolver that costs a query was paying that
+  twice.
+- The shorthand `@skip: true` and `@include: false` did nothing. The directive
+  lookup compared the value a directive carried against the directive's own
+  name, which no shorthand can satisfy.
+- A document holding several operations without an `operationName` reported
+  "This document does not define any operations", which describes the opposite
+  problem.
+- Numeric scalars accept an integer where the schema says `Float`, from a
+  literal and from a variable alike.
+- Two `@jsonpath` completions were dropped in flight: one nested inside a map,
+  one behind any non-nullable field.
+
+Added: 42 tests, where there were none.
+
+### One thing version 3 does not do
+
+A document is executed optimistically and is never validated against the schema
+first. An unknown field or an unknown fragment spread yields an empty object,
+and an undeclared variable resolves to `null`; none of the three is an error.
+Three tests record this, so that changing it stays a deliberate act rather than
+an accident.
+
+The full list is in [CHANGELOG.md](CHANGELOG.md).
+
 ## Installation
 
 These packages are not published on pub.dev. Depend on the repository:
