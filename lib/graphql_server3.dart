@@ -702,12 +702,12 @@ class GraphQL {
         );
 
         // An explicit `null` is a legal value for a nullable argument, and it
-        // never reaches validate(): several type validators take a
-        // non-nullable Dart parameter (GraphQLListType.validate takes a
-        // `List`), so a null would surface as a TypeError - "type 'Null' is
-        // not a subtype of type 'List<dynamic>'" - rather than as validation.
-        // Non-nullable types keep going through validate(), which already
-        // reports "Expected ... to be a non-null value".
+        // never reaches validate(): a validator answers about the *shape* of a
+        // value, so it rejects null the same way it rejects a string given to
+        // a list. Whether null is allowed at all is the nullable / non-nullable
+        // distinction, and that is decided here. Non-nullable types keep going
+        // through validate(), which already reports "Expected ... to be a
+        // non-null value".
         if (inputValue == null && argumentType is! GraphQLNonNullableType) {
           coercedValues[argumentName] = null;
           continue;

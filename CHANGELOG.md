@@ -2,6 +2,10 @@
 
 ## 3.2.0
 
+First release published to pub.dev. `graphql_schema3` and `graphql_parser3` are
+now hosted dependencies rather than git ones, which is what publishing requires
+and what lets a consumer resolve the whole stack from pub.
+
 ### Fixed
 - A fragment that spreads itself, directly or through a chain, no longer takes
   the isolate down. The guard that remembers which fragments have been expanded
