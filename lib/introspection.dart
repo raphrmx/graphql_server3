@@ -167,18 +167,25 @@ GraphQLObjectType? _reflectSchemaTypes() {
   return _typeType;
 }
 
+/// The `__TypeKind` values, named apart from the call that builds the type.
+///
+/// Inlining them put the call right on the boundary where two releases of
+/// `dart_style` disagree about where to break, so the file reformatted itself
+/// depending on which SDK ran. Naming the list settles it.
+const List<String> _typeKindNames = <String>[
+  'SCALAR',
+  'OBJECT',
+  'INTERFACE',
+  'UNION',
+  'ENUM',
+  'INPUT_OBJECT',
+  'LIST',
+  'NON_NULL',
+];
+
 final GraphQLEnumType<String> _typeKindType = enumTypeFromStrings(
   '__TypeKind',
-  [
-    'SCALAR',
-    'OBJECT',
-    'INTERFACE',
-    'UNION',
-    'ENUM',
-    'INPUT_OBJECT',
-    'LIST',
-    'NON_NULL',
-  ],
+  _typeKindNames,
 );
 
 GraphQLObjectType _createTypeType() {

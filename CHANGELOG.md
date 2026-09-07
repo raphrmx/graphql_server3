@@ -12,7 +12,15 @@
 - The `public_member_api_docs` lint, so that this cannot quietly come back. The
   package analyzes clean with it on.
 
-No code changed.
+### Changed
+- The `__TypeKind` values are a named constant rather than a list written inside
+  the call that builds the type. Inlined, that call sat exactly on the boundary
+  where two releases of `dart_style` disagree about where to break, so the file
+  reformatted itself according to which SDK ran and `dart format
+  --set-exit-if-changed` failed on CI while passing locally. Both formatters
+  agree on the named form.
+
+No behaviour changed.
 
 ## 3.2.0
 
