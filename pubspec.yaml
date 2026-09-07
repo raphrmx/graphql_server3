@@ -1,5 +1,5 @@
 name: graphql_server3
-version: 3.2.1
+version: 3.2.2
 description: >-
   A GraphQL server runtime for Dart. Executes queries, mutations and
   subscriptions against a graphql_schema3 schema, with introspection built in.

@@ -13,9 +13,10 @@ thus can be used in any Dart project.
 This package is a fork of the GraphQL stack maintained as part of
 [Angel3](https://github.com/dukefirehawk/angel), which itself descends from the
 `graphql_*` packages Tobe O wrote for Angel. The fork is taken from the `2`
-line; the original BSD-3-Clause licence and its copyright notice are kept
-verbatim in [LICENSE](LICENSE), and the bulk of the type system, the parser and
-the execution algorithm are still that work.
+line, and the bulk of the type system, the parser and the execution algorithm
+are still that work. [LICENSE](LICENSE) keeps the original BSD-3-Clause terms
+and the upstream copyright notice, alongside one for the work done on this line;
+[AUTHORS.md](AUTHORS.md) says who did what.
 
 Why fork at all. Two reasons, and only the second one still holds:
 

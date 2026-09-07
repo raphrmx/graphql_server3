@@ -1,5 +1,17 @@
 # Change Log
 
+## 3.2.2
+
+### Changed
+- `LICENSE` carries a copyright notice for the work done on this line, next to
+  the upstream one it has always kept, as the BSD-3-Clause terms require.
+  `AUTHORS.md` already recorded who did what; the licence file now says the same
+  thing.
+- The README says where to look for both, rather than describing the licence
+  file as untouched.
+
+No code changed.
+
 ## 3.2.1
 
 ### Added
