@@ -1,3 +1,14 @@
+/// Executes GraphQL documents against a `graphql_schema3` schema.
+///
+/// [GraphQL] is the whole of it: give it a schema, call
+/// [GraphQL.parseAndExecute] with a query, and get back the `data` map, or a
+/// `Stream` of them for a subscription. Introspection is wired up by default.
+///
+/// Serving this over HTTP or a WebSocket is deliberately left out, because it
+/// belongs to whichever framework you are using. For subscriptions over
+/// Apollo's `subscriptions-transport-ws`, see `subscriptions_transport_ws.dart`.
+library;
+
 import 'dart:async';
 import 'package:collection/collection.dart' show IterableExtension;
 import 'package:graphql_parser3/graphql_parser3.dart';
@@ -15,7 +26,17 @@ Map<String, dynamic> foldToStringDynamic(Map? map) {
   );
 }
 
+/// A variable whose value is not sent by the client, but read back out of the
+/// response while it is being built.
+///
+/// Declared with the `@jsonpath` directive on a variable definition. The path
+/// is dotted and rooted at `$`, so `$.user.id` waits until the `user` field has
+/// resolved and then takes its `id`. Until then the variable holds this object
+/// rather than a value; [complete] replaces it.
 class JsonPathArgument {
+  /// Splits [path] into its segments.
+  ///
+  /// Throws if it does not start with `$` and name at least one field.
   JsonPathArgument(
     this.path,
     this.definition,
@@ -29,13 +50,23 @@ class JsonPathArgument {
     _spl.removeAt(0);
   }
 
+  /// The path as written, `$` included.
   final String path;
+
+  /// The coerced variable map this argument writes itself into once completed.
   final Map<String, dynamic> variableValues;
   final List<String> _spl;
+
+  /// The value to record when the path resolves to null.
   final dynamic defaultValue;
+
+  /// The path segments, without the leading `$`.
   Iterable<String> get splitted => _spl;
+
+  /// The variable definition the `@jsonpath` directive was attached to.
   final VariableDefinitionContext definition;
 
+  /// Records [value] as this variable's value, or [defaultValue] if it is null.
   void complete(dynamic value) {
     variableValues[definition.variable.name] = value ?? defaultValue;
   }
@@ -53,6 +84,14 @@ class GraphQL {
 
   GraphQLSchema _schema;
 
+  /// Binds a [schema] to an executor.
+  ///
+  /// Pass `introspect: false` to leave `__schema` and `__type` out of the
+  /// schema; every type is still registered, so a fragment on a named type
+  /// keeps resolving. [defaultFieldResolver] is consulted for a field that has
+  /// no resolver of its own on an object that is not a [Map]. [customTypes]
+  /// adds types that no field mentions, which introspection would otherwise
+  /// never reach.
   GraphQL(
     GraphQLSchema schema, {
     bool introspect = true,
@@ -88,6 +127,12 @@ class GraphQL {
     }
   }
 
+  /// Resolves a type reference parsed from a query against the schema.
+  ///
+  /// Scalar names are answered directly; anything else is looked up among the
+  /// registered types. With [usePolymorphicName] and a [parent], a name is
+  /// matched against `polymorphicName` among that parent's possible types
+  /// first. Throws [ArgumentError] if the name is not in the schema.
   GraphQLType convertType(
     TypeContext ctx, {
     bool usePolymorphicName = false,
@@ -142,6 +187,16 @@ class GraphQL {
     }
   }
 
+  /// Parses [text] and executes it. The usual entry point.
+  ///
+  /// Answers the `data` map for a query or a mutation, and a `Stream` of them
+  /// for a subscription. [operationName] picks one operation out of a document
+  /// that defines several. Throws [GraphQLException] on a syntax error, on a
+  /// variable or argument that fails coercion, and on a null produced for a
+  /// non-nullable field.
+  ///
+  /// The document is not validated against the schema first: an unknown field
+  /// or fragment yields an empty object rather than an error.
   Future parseAndExecute(
     String text, {
     String? operationName,
@@ -179,6 +234,10 @@ class GraphQL {
     );
   }
 
+  /// Executes an already-parsed [document] against [schema].
+  ///
+  /// Coerces the variables, then dispatches to the query, mutation or
+  /// subscription path according to the operation.
   Future executeRequest(
     GraphQLSchema schema,
     DocumentContext document, {
@@ -223,6 +282,11 @@ class GraphQL {
     }
   }
 
+  /// Picks the operation to execute out of [document].
+  ///
+  /// Throws [GraphQLException] when [operationName] is null and the document
+  /// holds anything other than exactly one operation, and when a name is given
+  /// that the document does not define.
   OperationDefinitionContext getOperation(
     DocumentContext document,
     String? operationName,
@@ -251,6 +315,13 @@ class GraphQL {
     }
   }
 
+  /// Coerces the incoming [variableValues] against the operation's declared
+  /// variable definitions.
+  ///
+  /// Applies each declared default, validates and deserializes what was
+  /// supplied, and leaves a [JsonPathArgument] in place of a variable carrying
+  /// the `@jsonpath` directive. Throws [GraphQLException] for a missing
+  /// non-nullable variable or a value of the wrong type.
   Map<String, dynamic> coerceVariableValues(
     GraphQLSchema schema,
     OperationDefinitionContext operation,
@@ -321,6 +392,10 @@ class GraphQL {
     return coercedValues;
   }
 
+  /// Collects the [JsonPathArgument]s in [map] as paths still to be filled.
+  ///
+  /// Each entry is the remaining path segments followed by the argument itself,
+  /// so that execution can match them against response keys as it descends.
   List<List> makeLazy(Map<String, dynamic> map) {
     final lazy = <List>[];
 
@@ -335,6 +410,7 @@ class GraphQL {
     return lazy;
   }
 
+  /// Executes a query operation and answers its `data` map.
   Future<Map<String, dynamic>> executeQuery(
     DocumentContext document,
     OperationDefinitionContext query,
@@ -357,6 +433,9 @@ class GraphQL {
     );
   }
 
+  /// Executes a mutation operation and answers its `data` map.
+  ///
+  /// Throws [GraphQLException] if the schema defines no mutation type.
   Future<Map<String?, dynamic>> executeMutation(
     DocumentContext document,
     OperationDefinitionContext mutation,
@@ -385,6 +464,9 @@ class GraphQL {
     );
   }
 
+  /// Executes a subscription operation.
+  ///
+  /// Answers a stream that emits one response map per source event.
   Future<Stream<Map<String, dynamic>>> subscribe(
     DocumentContext document,
     OperationDefinitionContext subscription,
@@ -411,6 +493,10 @@ class GraphQL {
     );
   }
 
+  /// Resolves the single root field of a subscription into its event stream.
+  ///
+  /// Throws [GraphQLException] if the schema defines no subscription type, or
+  /// if the selection set does not name exactly one field.
   Future<Stream> createSourceEventStream(
     DocumentContext document,
     OperationDefinitionContext subscription,
@@ -456,6 +542,7 @@ class GraphQL {
     );
   }
 
+  /// Maps each event of [sourceStream] to the response it produces.
   Stream<Map<String, dynamic>> mapSourceToResponseEvent(
     Stream sourceStream,
     OperationDefinitionContext subscription,
@@ -477,6 +564,10 @@ class GraphQL {
     }
   }
 
+  /// Executes the subscription's selection set against one source event.
+  ///
+  /// A [GraphQLException] is caught and reported under the `errors` key rather
+  /// than ending the stream.
   Future<Map<String, dynamic>> executeSubscriptionEvent(
     DocumentContext document,
     OperationDefinitionContext subscription,
@@ -512,6 +603,10 @@ class GraphQL {
     }
   }
 
+  /// Calls the subscription field's resolver and normalises what it answers.
+  ///
+  /// A resolver that returns something other than a `Stream` is treated as a
+  /// stream of one event. Throws [GraphQLException] if no such field exists.
   Future<Stream> resolveFieldEventStream(
     GraphQLObjectType subscriptionType,
     rootValue,
@@ -535,6 +630,11 @@ class GraphQL {
     }
   }
 
+  /// Executes [selectionSet] against [objectValue] and answers the result map.
+  ///
+  /// Fields are grouped by response key, and each key is resolved once however
+  /// many selections were merged into it. A key naming a field the type does
+  /// not declare is skipped rather than reported.
   Future<Map<String, dynamic>> executeSelectionSet(
     DocumentContext document,
     SelectionSetContext selectionSet,
@@ -625,6 +725,8 @@ class GraphQL {
     return resultMap;
   }
 
+  /// Resolves one field: coerces its arguments, calls its resolver, then
+  /// completes the value against [fieldType].
   Future executeField(
     DocumentContext document,
     String? fieldName,
@@ -660,6 +762,12 @@ class GraphQL {
     );
   }
 
+  /// Coerces the arguments written on [field] against the ones its definition
+  /// declares.
+  ///
+  /// Applies defaults, accepts an explicit null for a nullable argument, and
+  /// throws [GraphQLException] for a missing non-nullable argument or a value
+  /// that fails the argument type's own validation.
   Map<String, dynamic> coerceArgumentValues(
     GraphQLObjectType objectType,
     SelectionContext field,
@@ -766,6 +874,11 @@ class GraphQL {
     return coercedValues;
   }
 
+  /// Reads one field off [objectValue].
+  ///
+  /// A [Map] is read by key, which takes precedence over the field's own
+  /// resolver. Otherwise the resolver runs, and failing that the
+  /// `defaultFieldResolver` given to the constructor, if any.
   Future<T?> resolveFieldValue<T>(
     GraphQLObjectType objectType,
     T objectValue,
@@ -791,6 +904,12 @@ class GraphQL {
     }
   }
 
+  /// Shapes a resolved value into its response form, following the field type.
+  ///
+  /// Unwraps non-null, maps over lists, serializes scalars, and recurses into
+  /// the sub-selection for an object or a union. Throws [GraphQLException] for
+  /// a null under a non-nullable type, for a non-iterable under a list type,
+  /// and for a scalar the type cannot serialize.
   Future completeValue(
     DocumentContext document,
     String? fieldName,
@@ -900,6 +1019,10 @@ class GraphQL {
     throw UnsupportedError('Unsupported type: $fieldType');
   }
 
+  /// Decides which concrete object type [result] belongs to.
+  ///
+  /// Each possible type is asked to validate the value, and exactly one match
+  /// wins. Throws [GraphQLException] listing every failure when none matches.
   GraphQLObjectType resolveAbstractType(
     String? fieldName,
     GraphQLType type,
@@ -955,6 +1078,10 @@ class GraphQL {
     throw GraphQLException(errors);
   }
 
+  /// Merges the sub-selections of [fields] into one selection set.
+  ///
+  /// This is what lets two selections on the same response key share a single
+  /// call to the field's resolver.
   SelectionSetContext mergeSelectionSets(List<SelectionContext> fields) {
     var selections = <SelectionContext>[];
 
@@ -969,6 +1096,12 @@ class GraphQL {
     return SelectionSetContext.merged(selections);
   }
 
+  /// Groups the selections of [selectionSet] by response key.
+  ///
+  /// Applies `@skip` and `@include`, and expands fragment spreads and inline
+  /// fragments whose type condition holds. [visitedFragments] is shared with
+  /// the recursion, so a fragment that spreads itself is expanded once instead
+  /// of recursing without end.
   Map<String?, List<SelectionContext>> collectFields(
     DocumentContext document,
     GraphQLObjectType? objectType,
@@ -1064,6 +1197,13 @@ class GraphQL {
     return groupedFields;
   }
 
+  /// Reads the value a directive named [name] carries on [holder].
+  ///
+  /// Answers null when the directive is absent. Both syntaxes are understood:
+  /// `@skip(if: true)`, whose argument must be [argumentName], and the
+  /// shorthand `@skip: true`, which carries no argument name. A variable is
+  /// resolved against [variableValues], and an undeclared one throws
+  /// [GraphQLException].
   dynamic getDirectiveValue(
     String name,
     String argumentName,
@@ -1100,6 +1240,7 @@ class GraphQL {
     return vv.computeValue(variableValues as Map<String, dynamic>);
   }
 
+  /// Whether a fragment's type condition holds for [objectType].
   bool doesFragmentTypeApply(
     GraphQLObjectType? objectType,
     TypeConditionContext fragmentType, {

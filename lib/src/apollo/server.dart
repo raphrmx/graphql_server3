@@ -2,16 +2,28 @@ import 'dart:async';
 import 'remote_client.dart';
 import 'transport.dart';
 
+/// A server speaking Apollo's `subscriptions-transport-ws` protocol.
+///
+/// Handles the handshake, the keep-alive and the message bookkeeping. Subclass
+/// it and answer [onConnect] and [onOperation]; how events reach a subscriber
+/// is left to you, and so is the transport, which can be anything
+/// `package:stream_channel` can carry.
 abstract class Server {
+  /// The client this server is talking to.
   final RemoteClient client;
+
+  /// How often to send a keep-alive, or null to send none.
   final Duration? keepAliveInterval;
   final Completer _done = Completer();
   StreamSubscription<OperationMessage>? _sub;
   bool _init = false;
   Timer? _timer;
 
+  /// Completes when the connection has been closed on either side.
   Future get done => _done.future;
 
+  /// Starts serving [client], sending a keep-alive every
+  /// [keepAliveInterval] if one is given.
   Server(this.client, {this.keepAliveInterval}) {
     _sub = client.stream.listen(
       (msg) async {
@@ -156,8 +168,16 @@ abstract class Server {
     );
   }
 
+  /// Whether to accept the connection, given the client's
+  /// `connection_init` payload.
+  ///
+  /// Answer false to refuse it; this is where authentication belongs.
   FutureOr<bool> onConnect(RemoteClient client, [Map? connectionParams]);
 
+  /// Executes one operation and answers its result.
+  ///
+  /// [id] identifies the operation within the connection, so that a
+  /// subscription's events can be routed back to it.
   FutureOr<GraphQLResult> onOperation(
     String? id,
     String query, [
