@@ -17,8 +17,8 @@ environment:
 
 dependencies:
   collection: ^1.19.1
-  graphql_parser3: ^3.2.0
-  graphql_schema3: ^3.2.0
+  graphql_parser3: ^3.2.1
+  graphql_schema3: ^3.2.1
   stream_channel: ^2.1.4
 
 dev_dependencies:

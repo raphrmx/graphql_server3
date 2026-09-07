@@ -48,8 +48,11 @@ dependency set is unchanged.
 
 ## What version 3 changed
 
-Four dependencies: `graphql_schema3`, `graphql_parser3`, `collection` and
-`stream_channel`.
+Four dependencies:
+[`graphql_schema3`](https://pub.dev/packages/graphql_schema3),
+[`graphql_parser3`](https://pub.dev/packages/graphql_parser3),
+[`collection`](https://pub.dev/packages/collection) and
+[`stream_channel`](https://pub.dev/packages/stream_channel).
 
 Removed:
 
@@ -182,7 +185,7 @@ However, you can call the `reflectSchema` method to manually reflect a schema.
 
 ## Building a schema from Dart types
 
-Use [`graphql_generator3`](https://github.com/raphrmx/graphql_generator3), which reads the
+Use [`graphql_generator3`](https://pub.dev/packages/graphql_generator3), which reads the
 annotations on your classes at build time and emits the matching `GraphQLObjectType`.
 
 The `dart:mirrors` entry point that earlier versions shipped is gone: it ruled out AOT

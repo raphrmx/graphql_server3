@@ -9,6 +9,9 @@
   thing.
 - The README says where to look for both, rather than describing the licence
   file as untouched.
+- The README links each dependency to its pub.dev page. The pointer between
+  these packages went to GitHub, which is the wrong destination from a pub.dev
+  page.
 
 No code changed.
 
