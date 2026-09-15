@@ -14,6 +14,9 @@ import 'package:collection/collection.dart' show IterableExtension;
 import 'package:graphql_parser3/graphql_parser3.dart';
 import 'package:graphql_schema3/graphql_schema3.dart';
 import 'introspection.dart';
+import 'src/validate.dart' as validation;
+
+export 'src/validate.dart' show validateDocument;
 
 /// Transforms any [Map] into `Map<String, dynamic>`.
 Map<String, dynamic> foldToStringDynamic(Map? map) {
@@ -82,6 +85,18 @@ class GraphQL {
   final FutureOr<T> Function<T>(T, String?, Map<String, dynamic>)?
   defaultFieldResolver;
 
+  /// Whether a document is checked against the schema before it runs.
+  ///
+  /// Off by default, so that taking this version changes nothing for a server
+  /// already running: an unknown field or fragment keeps yielding an empty
+  /// object and an undeclared variable keeps yielding null, as in 3.2.
+  ///
+  /// Turn it on to get what the specification requires, which is that a
+  /// document failing validation is refused rather than executed. Do it once
+  /// you know what your clients send, because a client whose document the
+  /// schema refuses stops working the moment you do.
+  final bool validate;
+
   GraphQLSchema _schema;
 
   /// Binds a [schema] to an executor.
@@ -91,10 +106,12 @@ class GraphQL {
   /// keeps resolving. [defaultFieldResolver] is consulted for a field that has
   /// no resolver of its own on an object that is not a [Map]. [customTypes]
   /// adds types that no field mentions, which introspection would otherwise
-  /// never reach.
+  /// never reach. Pass `validate: true` to check a document against the schema
+  /// before executing it.
   GraphQL(
     GraphQLSchema schema, {
     bool introspect = true,
+    this.validate = false,
     this.defaultFieldResolver,
     List<GraphQLType> customTypes = const <GraphQLType>[],
   }) : _schema = schema {
@@ -195,8 +212,8 @@ class GraphQL {
   /// variable or argument that fails coercion, and on a null produced for a
   /// non-nullable field.
   ///
-  /// The document is not validated against the schema first: an unknown field
-  /// or fragment yields an empty object rather than an error.
+  /// With [validate], the document is checked against the schema before
+  /// anything runs and every fault found is reported together.
   Future parseAndExecute(
     String text, {
     String? operationName,
@@ -234,10 +251,19 @@ class GraphQL {
     );
   }
 
+  /// Checks [document] against the schema this executor was built on.
+  ///
+  /// Answers the errors found, empty when the document may be executed.
+  /// [executeRequest] calls this when [validate] is on; call it yourself to
+  /// check a document without running it, whichever way the flag is set.
+  List<GraphQLExceptionError> validateDocument(DocumentContext document) =>
+      validation.validateDocument(document, _schema, customTypes);
+
   /// Executes an already-parsed [document] against [schema].
   ///
-  /// Coerces the variables, then dispatches to the query, mutation or
-  /// subscription path according to the operation.
+  /// Validates it first when [validate] is on, then coerces the variables and
+  /// dispatches to the query, mutation or subscription path according to the
+  /// operation.
   Future executeRequest(
     GraphQLSchema schema,
     DocumentContext document, {
@@ -246,6 +272,11 @@ class GraphQL {
     initialValue,
     Map<String, dynamic> globalVariables = const <String, dynamic>{},
   }) async {
+    if (validate) {
+      var errors = validation.validateDocument(document, schema, customTypes);
+      if (errors.isNotEmpty) throw GraphQLException(errors);
+    }
+
     var operation = getOperation(document, operationName);
     var coercedVariableValues = coerceVariableValues(
       schema,
