@@ -101,14 +101,28 @@ GraphQLSchema buildSchema() {
 Future<Map<String, dynamic>> run(
   String query, {
   Map<String, dynamic> variables = const <String, dynamic>{},
+  bool validate = true,
 }) async {
-  final GraphQL server = GraphQL(buildSchema());
+  final GraphQL server = GraphQL(buildSchema(), validate: validate);
   final Object? result = await server.parseAndExecute(
     query,
     variableValues: variables,
   );
   return (result as Map).cast<String, dynamic>();
 }
+
+/// Matches a [GraphQLException] whose messages, joined, satisfy [messages].
+///
+/// Joined rather than taken one by one, because validation reports every fault
+/// it found and the order between them is not part of the contract.
+Matcher failsWith(Object messages) => throwsA(
+  isA<GraphQLException>().having(
+    (GraphQLException e) =>
+        e.errors.map((GraphQLExceptionError x) => x.message).join(' | '),
+    'messages',
+    messages,
+  ),
+);
 
 void main() {
   group('execution', () {
@@ -443,41 +457,314 @@ void main() {
 
   group('fragment cycles', () {
     // A fragment that spreads itself used to recurse until the stack gave out,
-    // which is a four-line query that takes the whole isolate down.
-    test('a self-spreading fragment terminates', () async {
+    // which is a four-line query that takes the whole isolate down. Validation
+    // now refuses the document, and the guard in collectFields stays for the
+    // executor's own sake.
+    test('a self-spreading fragment is refused', () async {
+      await expectLater(
+        run('{ user { ...f } } fragment f on User { name ...f }'),
+        failsWith(contains('Cannot spread fragment "f" within itself.')),
+      );
+    });
+
+    test('a cycle through two fragments is refused', () async {
+      await expectLater(
+        run(
+          '{ user { ...a } } '
+          'fragment a on User { name ...b } '
+          'fragment b on User { age ...a }',
+        ),
+        failsWith(
+          contains('Cannot spread fragment "a" within itself via "b".'),
+        ),
+      );
+    });
+
+    test('one cycle is reported once, not once per member', () async {
+      try {
+        await run(
+          '{ user { ...a } } '
+          'fragment a on User { name ...b } '
+          'fragment b on User { age ...a }',
+        );
+        fail('the document should have been refused');
+      } on GraphQLException catch (e) {
+        expect(e.errors, hasLength(1));
+      }
+    });
+
+    test('a self-spreading fragment still terminates unvalidated', () async {
       final Map<String, dynamic> data = await run(
         '{ user { ...f } } fragment f on User { name ...f }',
+        validate: false,
       );
 
       expect(data['user'], <String, dynamic>{'name': 'anna'});
     });
 
-    test('a cycle through two fragments terminates', () async {
+    test('a two-fragment cycle still terminates unvalidated', () async {
       final Map<String, dynamic> data = await run(
         '{ user { ...a } } '
         'fragment a on User { name ...b } '
         'fragment b on User { age ...a }',
+        validate: false,
       );
 
       expect(data['user'], <String, dynamic>{'name': 'anna', 'age': 30});
     });
   });
 
-  group('known gap: no document validation', () {
-    test('an unknown field yields an empty object', () async {
-      expect((await run('{ user { nickname } }'))['user'], isEmpty);
+  group('document validation', () {
+    test('refuses a field the type does not declare', () async {
+      await expectLater(
+        run('{ user { nickname } }'),
+        failsWith(contains('Cannot query field "nickname" on type "User".')),
+      );
     });
 
-    test('an unknown fragment spread yields an empty object', () async {
-      expect((await run('{ user { ...nope } }'))['user'], isEmpty);
+    test('refuses a spread naming no fragment', () async {
+      await expectLater(
+        run('{ user { ...nope } }'),
+        failsWith(contains('Unknown fragment "nope".')),
+      );
     });
 
-    test('an undeclared variable resolves to null', () async {
+    test('refuses a variable the operation does not declare', () async {
+      await expectLater(
+        run(r'query Q { echo(text: $missing) }'),
+        failsWith(
+          contains(r'Variable "$missing" is not defined by operation "Q".'),
+        ),
+      );
+    });
+
+    test('follows a spread to the variables the fragment uses', () async {
+      await expectLater(
+        run(r'query Q { ...f } fragment f on Query { echo(text: $t) }'),
+        failsWith(contains(r'Variable "$t" is not defined by operation "Q".')),
+      );
+    });
+
+    test('accepts a variable declared for a fragment that uses it', () async {
       final Map<String, dynamic> data = await run(
-        r'query Q { echo(text: $missing) }',
+        r'query Q($t: String) { ...f } fragment f on Query { echo(text: $t) }',
+        variables: <String, dynamic>{'t': 'hi'},
       );
 
-      expect(data['echo'], isNull);
+      expect(data['echo'], 'hi');
+    });
+
+    test('refuses a selection on a scalar field', () async {
+      await expectLater(
+        run('{ user { name { first } } }'),
+        failsWith(contains('must not have a selection since type "String"')),
+      );
+    });
+
+    test('refuses an object field carrying no selection', () async {
+      await expectLater(
+        run('{ user }'),
+        failsWith(
+          contains('Field "user" of type "User" must have a selection'),
+        ),
+      );
+    });
+
+    test('refuses a fragment on a type the schema does not declare', () async {
+      await expectLater(
+        run('{ user { ...f } } fragment f on Ghost { name }'),
+        failsWith(contains('Unknown type "Ghost".')),
+      );
+    });
+
+    test('refuses two operations sharing a name', () async {
+      await expectLater(
+        run('query A { user { name } } query A { user { age } }'),
+        failsWith(contains('There can be only one operation named "A".')),
+      );
+    });
+
+    test('refuses an anonymous operation alongside another', () async {
+      await expectLater(
+        run('{ user { name } } query B { user { age } }'),
+        failsWith(contains('anonymous operation must be the only operation')),
+      );
+    });
+
+    test('refuses two fragments sharing a name', () async {
+      await expectLater(
+        run(
+          '{ user { ...f } } '
+          'fragment f on User { name } '
+          'fragment f on User { age }',
+        ),
+        failsWith(contains('There can be only one fragment named "f".')),
+      );
+    });
+
+    test('reports every fault at once', () async {
+      await expectLater(
+        run('{ user { nickname } tags { colour } }'),
+        failsWith(allOf(contains('"nickname"'), contains('"colour"'))),
+      );
+    });
+
+    test('runs no resolver when the document is refused', () async {
+      userResolverCalls = 0;
+
+      await expectLater(
+        run('{ user { name nickname } }'),
+        throwsA(isA<GraphQLException>()),
+      );
+      expect(userResolverCalls, 0);
+    });
+
+    test('answers __typename without calling it a field', () async {
+      expect((await run('{ user { __typename } }'))['user'], <String, dynamic>{
+        '__typename': 'User',
+      });
+    });
+
+    test('is off unless the constructor asks for it', () async {
+      // The default is what a server taking this version gets without touching
+      // its code, so it is pinned rather than assumed.
+      final GraphQL server = GraphQL(buildSchema());
+      final Object? result = await server.parseAndExecute(
+        '{ user { nickname } }',
+      );
+
+      expect((result as Map)['user'], isEmpty);
+    });
+
+    test('leaves the 3.2 behaviour in place when turned off', () async {
+      expect(
+        (await run('{ user { nickname } }', validate: false))['user'],
+        isEmpty,
+      );
+      expect(
+        (await run('{ user { ...nope } }', validate: false))['user'],
+        isEmpty,
+      );
+      expect(
+        (await run(
+          r'query Q { echo(text: $missing) }',
+          validate: false,
+        ))['echo'],
+        isNull,
+      );
+    });
+  });
+
+  group('argument names', () {
+    test('refuses an argument the field does not declare', () async {
+      await expectLater(
+        run('{ echo(txt: "a") }'),
+        failsWith(contains('Unknown argument "txt" on field "Query.echo".')),
+      );
+    });
+
+    test('refuses an argument on a field that takes none', () async {
+      await expectLater(
+        run('{ user(id: 1) { name } }'),
+        failsWith(contains('Unknown argument "id" on field "Query.user".')),
+      );
+    });
+
+    test('accepts the argument the field declares', () async {
+      expect((await run('{ echo(text: "a") }'))['echo'], 'a');
+    });
+  });
+
+  group('selection merging', () {
+    // Two selections under one response key resolve once, so the second used
+    // to disappear from the answer without a word.
+    test('refuses two different fields under one alias', () async {
+      await expectLater(
+        run('{ user { a: name a: age } }'),
+        failsWith(
+          contains(
+            'Fields "a" conflict because "name" and "age" are '
+            'different fields.',
+          ),
+        ),
+      );
+    });
+
+    test('refuses one field asked twice with different arguments', () async {
+      await expectLater(
+        run('{ echo(text: "x") echo(text: "y") }'),
+        failsWith(
+          contains(
+            'Fields "echo" conflict because they are given different '
+            'arguments.',
+          ),
+        ),
+      );
+    });
+
+    test('accepts one field asked twice with the same arguments', () async {
+      expect((await run('{ echo(text: "x") echo(text: "x") }'))['echo'], 'x');
+    });
+
+    test('compares variables by name, not by value', () async {
+      await expectLater(
+        run(
+          r'query Q($a: String, $b: String) { echo(text: $a) echo(text: $b) }',
+          variables: <String, dynamic>{'a': 'x', 'b': 'x'},
+        ),
+        failsWith(contains('given different arguments')),
+      );
+
+      expect(
+        (await run(
+          r'query Q($a: String) { echo(text: $a) echo(text: $a) }',
+          variables: <String, dynamic>{'a': 'x'},
+        ))['echo'],
+        'x',
+      );
+    });
+
+    test('accepts two fields under two aliases', () async {
+      expect(
+        (await run('{ user { a: name b: age } }'))['user'],
+        <String, dynamic>{'a': 'anna', 'b': 30},
+      );
+    });
+
+    test('accepts __typename asked twice', () async {
+      expect(
+        (await run('{ user { __typename __typename } }'))['user'],
+        <String, dynamic>{'__typename': 'User'},
+      );
+    });
+  });
+
+  group('fragment placement', () {
+    test('refuses a fragment on a type the parent can never be', () async {
+      await expectLater(
+        run('{ user { ...f } } fragment f on Tag { label }'),
+        failsWith(
+          contains(
+            'Fragment "f" cannot be spread here, as objects of type '
+            '"User" can never be of type "Tag".',
+          ),
+        ),
+      );
+    });
+
+    test('refuses an inline fragment the parent can never be', () async {
+      await expectLater(
+        run('{ user { ... on Tag { label } } }'),
+        failsWith(contains('can never be of type "Tag"')),
+      );
+    });
+
+    test('accepts a fragment on the parent type itself', () async {
+      final Map<String, dynamic> data = await run(
+        '{ user { ...f } } fragment f on User { name }',
+      );
+
+      expect(data['user'], <String, dynamic>{'name': 'anna'});
     });
   });
 

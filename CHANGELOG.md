@@ -1,5 +1,79 @@
 # Change Log
 
+## 3.3.0
+
+### Added
+- `GraphQL(schema, validate: true)` checks a document against the schema
+  before executing it, which the specification requires and which this package
+  did not do. `parseAndExecute` and `executeRequest` then throw a
+  `GraphQLException` carrying every fault found, before any resolver runs.
+  `validateDocument` answers the same errors for a parsed document without
+  running it, whichever way the flag is set.
+- The flag is off by default, so this version changes nothing for a server that
+  takes it without asking. Off, an unknown field or fragment still yields an
+  empty object and an undeclared variable still yields `null`, as in 3.2.
+- The rules applied are 5.2.1.1 and 5.5.1.1 (an operation or fragment name is
+  defined once, and an anonymous operation stands alone), 5.3.1 (a field is
+  declared by the type it is selected on), 5.3.2 (two selections written side
+  by side under one response key name the same field with the same arguments),
+  5.3.3 (an object field carries a selection and a leaf field carries none),
+  5.4.1 (a field's arguments are declared by that field), 5.5.1.2 (a fragment
+  conditions on a composite type the schema declares), 5.5.2.1 (a spread names
+  a fragment the document defines), 5.5.2.2 (no fragment spreads itself),
+  5.5.2.3 (a fragment is spread somewhere it can apply) and 5.8.3 (every
+  variable used is declared by its operation, through a fragment included).
+- Two rules are left out on purpose: 5.7.1, because this package carries
+  application directives such as `@jsonpath` and refusing whatever a schema
+  does not declare would break a consumer over a directive it owns, and
+  5.5.1.4, because a fragment declared and not spread harms nobody.
+- 59 tests, 31 of them on the two subscription layers, which had none.
+
+### Added, continued
+- `graphql_ws.dart` serves the `graphql-transport-ws` protocol, which is what a
+  current Apollo Client or urql speaks by default. `GraphQLWsServer` asks for
+  the same two decisions as the older `Server`, so a server can be moved from
+  one protocol to the other without rewriting what it answers, and both can be
+  served side by side: the `Sec-WebSocket-Protocol` header of the handshake
+  says which one a client wants.
+- The newer protocol reports a refusal with a WebSocket close code rather than
+  with a message. This package does not own the socket, so `GraphQLWsServer`
+  hands the code to `onClose`, which a WebSocket transport overrides. The codes
+  are named in `GraphQLWsCloseCode`.
+- `connectionInitWaitTimeout` closes a connection whose `connection_init` never
+  arrives.
+- `GraphQLResult` moved to its own file, because both transports answer with
+  it. It is still exported from `subscriptions_transport_ws.dart`, so nothing
+  moved for a consumer.
+
+### Fixed
+- `stop` is handled. A running subscription is held against its operation id,
+  cancelled when the client asks for it, and cancelled again when the connection
+  is terminated. The message was read and dropped, so a client could not
+  unsubscribe and events kept being pushed until the socket closed.
+- A malformed `start`, and an `onOperation` that throws, answer an `error`
+  message naming the operation. Both used to leave an unhandled asynchronous
+  error, since a stream ignores the future its callback returns. A single
+  malformed frame could therefore take down more than the operation it named.
+- `connection_terminate` completes `done` and cancels the keep-alive timer. It
+  cancelled the message subscription, which stops `onDone` from ever running.
+- The licence badge in the README said MIT. The licence is BSD-3-Clause, as the
+  paragraph below the badge already said.
+
+### Deprecated
+- `OperationMessage.legacyGqlConnectionInit` and the nine constants beside it.
+  Each holds the constant it is named after, character for character, so the
+  pair never carried two different values. They go in 4.0.0.
+
+### What changes when you turn validation on
+- A document that names an unknown field, an unknown argument or an unknown
+  fragment, that puts two different selections under one response key, that
+  spreads a fragment where it can never apply, or that uses an undeclared
+  variable, is refused instead of answering an empty object, a `null`, or an
+  answer quietly missing one of its keys. A client sending such a document
+  stops working, so find out what your clients send before you switch.
+- With `introspect: false`, `__schema` and `__type` are refused as fields the
+  query type does not declare. They used to answer an empty object.
+
 ## 3.2.2
 
 ### Changed
