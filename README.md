@@ -1,14 +1,9 @@
-
-<a alt="ComApps Logo" href="https://comapps.be" target="_blank" rel="noreferrer"><img src="https://www.comapps.be/wp-content/uploads/2026/09/CompleteLogoHorizontalMini.png" style="margin: 15px"></a>
-
 # GraphQL Server 3
 
+[![Pub Version](https://img.shields.io/pub/v/graphql_server3?color=0175C2)](https://pub.dev/packages/graphql_server3)
 [![Build](https://img.shields.io/github/actions/workflow/status/raphrmx/graphql_server3/ci.yml?branch=main&label=build)](https://github.com/raphrmx/graphql_server3/actions/workflows/ci.yml)
-[![Pub Version](https://img.shields.io/pub/v/graphql_server3?color=blue)](https://pub.dev/packages/graphql_server3)
-[![Maintainer](https://img.shields.io/badge/Maintainer-Raphael_Vrient-purple)](https://pub.dev/publishers/comapps.be/packages)
-[![License](https://img.shields.io/badge/Licence-BSD--3--Clause-blue)](LICENSE)
-![Maintenance](https://img.shields.io/badge/Maintained-yes-success)
-![Null Safety](https://img.shields.io/badge/Null_Safety-passing-success)
+![Maintainer](https://img.shields.io/badge/Maintainer-Raphael_Vrient-733d90)
+[![Licence](https://img.shields.io/badge/Licence-MIT-8C6A3F)](LICENSE)
 ![Platforms](https://img.shields.io/badge/Platforms-Android,_iOS,_macOS,_Windows,_Linux,_Web-22375C.svg)
 
 Base package for implementing GraphQL servers. It does not require any specific framework, and
@@ -184,7 +179,6 @@ The full list is in [CHANGELOG.md](CHANGELOG.md).
 ```bash
 dart pub add graphql_server3
 ```
-
 
 ## Ad-hoc Usage
 

@@ -1,5 +1,17 @@
 # Change Log
 
+## 3.3.1
+
+### Changed
+
+- The README carries its build badge again, pointed at the branch the repository
+  actually builds from.
+- `homepage` points at the package's card on comapps.web.app, which lists every
+  package published under COMAPPS.
+- The README badge row carries the maintainer again, and a licence badge in a
+  colour of its own rather than the grey shields puts in every label. Nothing
+  about the library changed.
+
 ## 3.3.0
 
 ### Added
