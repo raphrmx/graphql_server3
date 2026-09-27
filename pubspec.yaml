@@ -1,9 +1,9 @@
 name: graphql_server3
-version: 3.3.0
+version: 3.3.1
 description: >-
   A GraphQL server runtime for Dart. Executes queries, mutations and
   subscriptions against a graphql_schema3 schema, with introspection built in.
-homepage: https://github.com/raphrmx/graphql_server3
+homepage: https://comapps.web.app/#graphql_server3
 repository: https://github.com/raphrmx/graphql_server3
 issue_tracker: https://github.com/raphrmx/graphql_server3/issues
 
@@ -17,8 +17,8 @@ environment:
 
 dependencies:
   collection: ^1.19.1
-  graphql_parser3: ^3.2.1
-  graphql_schema3: ^3.2.1
+  graphql_parser3: ^3.2.2
+  graphql_schema3: ^3.2.2
   stream_channel: ^2.1.4
 
 dev_dependencies:
