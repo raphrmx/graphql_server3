@@ -1,5 +1,14 @@
 # Change Log
 
+## 3.3.3
+
+### Changed
+
+- Depends on `graphql_parser3` ^3.3.0 and `graphql_schema3` ^3.3.0, up from
+  ^3.2.2 for both.
+- Works on the package with `test` ^1.33.0, up from ^1.31.0. Nothing about the
+  library changed.
+
 ## 3.3.2
 
 ### Changed

@@ -1,5 +1,5 @@
 name: graphql_server3
-version: 3.3.2
+version: 3.3.3
 description: >-
   A GraphQL server runtime for Dart. Executes queries, mutations and
   subscriptions against a graphql_schema3 schema, with introspection built in.
@@ -19,13 +19,13 @@ environment:
 
 dependencies:
   collection: ^1.19.1
-  graphql_parser3: ^3.2.2
-  graphql_schema3: ^3.2.2
+  graphql_parser3: ^3.3.0
+  graphql_schema3: ^3.3.0
   stream_channel: ^2.1.4
 
 dev_dependencies:
   lints: ^6.1.0
-  test: ^1.31.0
+  test: ^1.33.0
 
 # Uncomment while working on the sibling packages: without these, the two
 # dependencies above are resolved from pub.dev and local edits have no effect.
